@@ -1,18 +1,22 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "./app.module";
-// Import ValidationPipe for DTO validation
 import { ValidationPipe } from "@nestjs/common";
+import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
+import { Logger } from "nestjs-pino"; // Import the logger type
 
 async function bootstrap() {
-  // Create the Nest application instance
-  const app = await NestFactory.create(AppModule);
+  // Create the app with the Pino logger enabled
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true, // Don't log until the logger is ready
+  });
 
-  // Set global prefix for all routes: /api/v1/...
+  // Use the Pino logger for all NestJS internal logs
+  app.useLogger(app.get(Logger));
+
+  // ─── Global prefix ──────────────────────────────────────────────
   app.setGlobalPrefix("api/v1");
 
-  // Use global validation pipe
-  // whitelist: strip properties not defined in DTOs
-  // transform: automatically transform payloads to DTO instances
+  // ─── Global validation pipe ──────────────────────────────────
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -20,11 +24,40 @@ async function bootstrap() {
     }),
   );
 
-  // Enable CORS for frontend (allow requests from different origin)
+  // ─── CORS ──────────────────────────────────────────────────────
   app.enableCors();
 
-  // Start server on port 3001
-  await app.listen(3001);
-  console.log(`🚀 Backend running on http://localhost:3001`);
+  // ─── Swagger / OpenAPI documentation ─────────────────────────
+  const config = new DocumentBuilder()
+    .setTitle("Full-Stack Template API")
+    .setDescription("Authentication and user management API")
+    .setVersion("1.0")
+    .addBearerAuth(
+      {
+        type: "http",
+        scheme: "bearer",
+        bearerFormat: "JWT",
+        name: "JWT",
+        description: "Enter JWT token",
+        in: "header",
+      },
+      "JWT-auth",
+    )
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup("api/docs", app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
+
+  // ─── Start server ─────────────────────────────────────────────
+  const port = process.env.PORT || 3001;
+  await app.listen(port);
+  // Use the injected logger instead of console.log
+  const logger = app.get(Logger);
+  logger.log(`🚀 Backend running on http://localhost:${port}`);
+  logger.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
 }
 bootstrap();

@@ -13,6 +13,7 @@ import { TokenResponseDto } from "./dto/token.dto";
 import { Public } from "../../common/decorators/public.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RefreshGuard } from "../../common/guards/refresh.guard";
+import { Throttle } from "@nestjs/throttler";
 import {
   ApiTags,
   ApiOperation,
@@ -21,27 +22,30 @@ import {
   ApiBody,
 } from "@nestjs/swagger";
 
-@ApiTags("Authentication") // Groups endpoints under "Authentication" in Swagger
+@ApiTags("Authentication")
 @Controller("auth")
 export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Public()
   @Post("register")
+  // Limit to 5 requests per minute for registration
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: "Register a new user" })
   @ApiResponse({
     status: 201,
     description: "User registered successfully",
-    type: TokenResponseDto, // Swagger will show the shape of the response
+    type: TokenResponseDto,
   })
   @ApiResponse({ status: 409, description: "Email already registered" })
-  @ApiResponse({ status: 400, description: "Validation failed" })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
   }
 
   @Public()
   @Post("login")
+  // Stricter limit: 5 attempts per minute per IP
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: "Login with email and password" })
   @ApiResponse({
     status: 200,
@@ -56,13 +60,13 @@ export class AuthController {
   @Public()
   @UseGuards(RefreshGuard)
   @Post("refresh")
-  @ApiOperation({ summary: "Refresh access token using refresh token" })
+  // Less strict: 20 refreshes per minute
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: "Refresh access token" })
   @ApiBody({
     schema: {
       type: "object",
-      properties: {
-        refresh_token: { type: "string", example: "eyJhbGciOiJIUzI1NiIs..." },
-      },
+      properties: { refresh_token: { type: "string" } },
     },
   })
   @ApiResponse({
@@ -70,7 +74,6 @@ export class AuthController {
     description: "New tokens generated",
     type: TokenResponseDto,
   })
-  @ApiResponse({ status: 401, description: "Invalid refresh token" })
   async refresh(@Req() req: Request) {
     const refreshToken = req.body.refresh_token as string;
     const user = req.user as { userId: string; email: string; role: string };
@@ -79,10 +82,10 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Post("logout")
-  @ApiBearerAuth("JWT-auth") // This tells Swagger to require Bearer token
-  @ApiOperation({ summary: "Logout and invalidate refresh token" })
+  // No need to throttle logout, but keep default
+  @ApiBearerAuth("JWT-auth")
+  @ApiOperation({ summary: "Logout" })
   @ApiResponse({ status: 200, description: "Logged out successfully" })
-  @ApiResponse({ status: 401, description: "Unauthorized" })
   async logout(@Req() req: Request) {
     const user = req.user as { userId: string; email: string; role: string };
     return this.authService.logout(user.userId);

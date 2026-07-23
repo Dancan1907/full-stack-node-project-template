@@ -1,14 +1,17 @@
 import { Module } from "@nestjs/common";
-// Import ConfigModule for global configuration
 import { ConfigModule } from "@nestjs/config";
+import { LoggerModule } from "nestjs-pino";
+import { loggerConfig } from "./config/logger.config";
 import { PrismaModule } from "./modules/prisma/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 
 @Module({
   imports: [
-    // ConfigModule loads .env variables globally
+    // Logger module – must be imported before any module that uses it
+    LoggerModule.forRoot(loggerConfig),
+
     ConfigModule.forRoot({
-      isGlobal: true, // makes ConfigService available everywhere
+      isGlobal: true,
     }),
     PrismaModule,
     AuthModule,

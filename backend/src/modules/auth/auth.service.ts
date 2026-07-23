@@ -3,6 +3,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  BadRequestException,
 } from "@nestjs/common";
 // JwtService for signing tokens
 import { JwtService } from "@nestjs/jwt";
@@ -17,14 +18,19 @@ import { LoginDto } from "./dto/login.dto";
 import { User, Role } from "@prisma/client";
 // Pino logger for structured logging of critical auth events
 import { Logger } from "nestjs-pino";
+// EmailService to send verification emails
+import { EmailService } from "../email/email.service";
+// randomBytes to generate a secure verification token
+import { randomBytes } from "crypto";
 
 @Injectable() // Marks this class as injectable in NestJS DI container
 export class AuthService {
-  // Inject PrismaService, JwtService, and the Pino Logger
+  // Inject PrismaService, JwtService, the Pino Logger, and EmailService
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
     private readonly logger: Logger, // <-- Inject logger
+    private readonly emailService: EmailService, // <-- inject EmailService
   ) {}
 
   // ---------- REGISTER ----------
@@ -47,7 +53,12 @@ export class AuthService {
     // argon2.hash() automatically generates a salt and uses recommended parameters
     const hashedPassword = await argon2.hash(dto.password!);
 
-    // 3. Create the user in the database
+    // 3. Generate verification token (24-hour expiry)
+    const verificationToken = randomBytes(32).toString("hex");
+    const verificationTokenExpiry = new Date();
+    verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24);
+
+    // 4. Create the user in the database
     // We set default role to USER, isActive true, emailVerified false
     const user = await this.prisma.user.create({
       data: {
@@ -57,30 +68,76 @@ export class AuthService {
         role: Role.USER,
         isActive: true,
         emailVerified: false,
+        verificationToken: verificationToken,
+        verificationTokenExpiry: verificationTokenExpiry,
       },
     });
 
-    // 4. Generate access and refresh tokens for this user
-    const tokens = await this.generateTokens(user);
-
-    // 5. Store the refresh token in the user's record (for later validation)
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { refreshToken: tokens.refresh_token },
-    });
+    // 5. Send verification email (don't await to avoid blocking response)
+    this.emailService
+      .sendVerificationEmail(dto.email!, dto.name!, verificationToken)
+      .catch((error) => {
+        this.logger.error(
+          { error },
+          `Failed to send verification email to ${dto.email}`,
+        );
+      });
 
     this.logger.log(
-      `User registered successfully: ${user.email} (ID: ${user.id})`,
+      `User registered: ${user.email} (ID: ${user.id}), verification email sent`,
     );
 
-    // 6. Remove password and refreshToken from the user object before returning
+    // 6. Remove password, refreshToken, and verification fields from the user object before returning
     // Using destructuring to exclude them
-    const { password, refreshToken, ...result } = user;
-    // Return user info plus tokens
+    const {
+      password: _password,
+      refreshToken: _refreshToken,
+      verificationToken: _vToken,
+      verificationTokenExpiry: _vExpiry,
+      ...result
+    } = user;
+    // Return user info plus a message prompting email verification
     return {
       user: result,
-      ...tokens,
+      message:
+        "Registration successful. Please check your email to verify your account.",
     };
+  }
+
+  // ---------- VERIFY EMAIL ----------
+  async verifyEmail(token: string) {
+    this.logger.log(
+      `Email verification attempt with token: ${token.substring(0, 8)}...`,
+    );
+    // Find user with matching verification token
+    const user = await this.prisma.user.findFirst({
+      where: {
+        verificationToken: token,
+        verificationTokenExpiry: { gt: new Date() }, // token must not be expired
+      },
+    });
+    if (!user) {
+      this.logger.warn(`Email verification failed: invalid or expired token`);
+      throw new BadRequestException("Invalid or expired verification token");
+    }
+    // Check if already verified
+    if (user.emailVerified) {
+      this.logger.warn(
+        `Email verification attempt for already verified user: ${user.email}`,
+      );
+      throw new BadRequestException("Email already verified");
+    }
+    // Update user: set emailVerified = true, clear verification token
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        verificationToken: null,
+        verificationTokenExpiry: null,
+      },
+    });
+    this.logger.log(`Email verified successfully: ${user.email}`);
+    return { message: "Email verified successfully. You can now log in." };
   }
 
   // ---------- LOGIN ----------
@@ -95,6 +152,14 @@ export class AuthService {
       this.logger.warn(`Login failed: email ${dto.email} not found`);
       // If no user, return generic Unauthorized to avoid leaking info
       throw new UnauthorizedException("Invalid credentials");
+    }
+
+    // Check if email is verified
+    if (!user.emailVerified) {
+      this.logger.warn(`Login failed: email ${dto.email} not verified`);
+      throw new UnauthorizedException(
+        "Please verify your email before logging in",
+      );
     }
 
     // 2. Check if account is active
@@ -123,7 +188,11 @@ export class AuthService {
     this.logger.log(`User logged in: ${user.email} (ID: ${user.id})`);
 
     // 6. Return user info (without sensitive fields) and tokens
-    const { password, refreshToken, ...result } = user;
+    const {
+      password: _password,
+      refreshToken: _refreshToken,
+      ...result
+    } = user;
     return {
       user: result,
       ...tokens,
@@ -203,7 +272,7 @@ export class AuthService {
     }
 
     // Return user without password
-    const { password: _, ...result } = user;
+    const { password: _password, ...result } = user;
     return result;
   }
 

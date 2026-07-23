@@ -43,6 +43,23 @@ export class AuthController {
   }
 
   @Public()
+  @Post("verify-email")
+  @ApiOperation({ summary: "Verify email with token" })
+  @ApiBody({
+    schema: {
+      type: "object",
+      properties: {
+        token: { type: "string", example: "abc123..." },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: "Email verified successfully" })
+  @ApiResponse({ status: 400, description: "Invalid or expired token" })
+  async verifyEmail(@Body("token") token: string) {
+    return this.authService.verifyEmail(token);
+  }
+
+  @Public()
   @Post("login")
   // Stricter limit: 5 attempts per minute per IP
   @Throttle({ default: { limit: 5, ttl: 60000 } })

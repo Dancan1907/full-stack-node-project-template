@@ -7,12 +7,15 @@ import { APP_GUARD } from "@nestjs/core";
 import { PrismaModule } from "./modules/prisma/prisma.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
+import { EmailModule } from "./modules/email/email.module";
+import emailConfig from "./config/email.config";
 
 @Module({
   imports: [
     LoggerModule.forRoot(loggerConfig),
     ConfigModule.forRoot({
       isGlobal: true,
+      load: [emailConfig], // you can add email config here later
     }),
     // Throttler with in‑memory storage (no Redis)
     ThrottlerModule.forRoot({
@@ -26,6 +29,7 @@ import { UsersModule } from "./modules/users/users.module";
     PrismaModule,
     AuthModule,
     UsersModule,
+    EmailModule,
   ],
   providers: [
     {

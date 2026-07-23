@@ -3,17 +3,17 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { ChangeRoleDto } from "./dto/change-role.dto";
-import { User } from "@prisma/client";
+import { UserResponseDto } from "./dto/user-response.dto";
 
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Find all users (excluding passwords and refresh tokens)
+   * Find all users (returns UserResponseDto array)
    */
-  async findAll(): Promise<Omit<User, "password" | "refreshToken">[]> {
-    return this.prisma.user.findMany({
+  async findAll(): Promise<UserResponseDto[]> {
+    const users = await this.prisma.user.findMany({
       select: {
         id: true,
         email: true,
@@ -23,15 +23,17 @@ export class UsersService {
         emailVerified: true,
         createdAt: true,
         updatedAt: true,
-        // Exclude password and refreshToken
       },
     });
+    // The Prisma result matches UserResponseDto shape exactly
+    return users as UserResponseDto[];
   }
 
   /**
-   * Find a single user by ID (exclude sensitive fields)
+   * Find a single user by ID
+   * Returns UserResponseDto or throws NotFoundException
    */
-  async findOne(id: string): Promise<Omit<User, "password" | "refreshToken">> {
+  async findOne(id: string): Promise<UserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id },
       select: {
@@ -48,18 +50,16 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
-    return user;
+    return user as UserResponseDto;
   }
 
   /**
    * Update a user (only provided fields)
+   * Returns updated UserResponseDto
    */
-  async update(
-    id: string,
-    dto: UpdateUserDto,
-  ): Promise<Omit<User, "password" | "refreshToken">> {
-    // Check if user exists
-    await this.findOne(id); // will throw if not found
+  async update(id: string, dto: UpdateUserDto): Promise<UserResponseDto> {
+    // Check if user exists (will throw if not found)
+    await this.findOne(id);
 
     const updated = await this.prisma.user.update({
       where: { id },
@@ -80,27 +80,24 @@ export class UsersService {
         updatedAt: true,
       },
     });
-    return updated;
+    return updated as UserResponseDto;
   }
 
   /**
    * Change a user's role (convenience method)
+   * Returns updated UserResponseDto
    */
-  async changeRole(
-    id: string,
-    dto: ChangeRoleDto,
-  ): Promise<Omit<User, "password" | "refreshToken">> {
+  async changeRole(id: string, dto: ChangeRoleDto): Promise<UserResponseDto> {
     return this.update(id, { role: dto.role });
   }
 
   /**
-   * Delete (soft delete) a user – set isActive to false
-   * Or we can hard delete (remove from DB). We'll do hard delete for simplicity.
+   * Delete a user (hard delete)
    */
   async remove(id: string): Promise<void> {
-    // Check if user exists
+    // Check if user exists (will throw if not found)
     await this.findOne(id);
-
+    // Delete the user
     await this.prisma.user.delete({
       where: { id },
     });

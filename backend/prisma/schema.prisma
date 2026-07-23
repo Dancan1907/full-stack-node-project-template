@@ -17,6 +17,11 @@ model User {
   isActive     Boolean  @default(true)
   emailVerified Boolean @default(false)
   refreshToken String?  @unique   // <-- NEW: stores the current valid refresh token
+
+  // Email verification fields
+  verificationToken      String?  @unique
+  verificationTokenExpiry DateTime?
+  
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

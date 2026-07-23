@@ -7,6 +7,7 @@ import { JwtStrategy } from "./strategies/jwt.strategy";
 import { LocalStrategy } from "./strategies/local.strategy";
 import { RefreshStrategy } from "./strategies/refresh.strategy";
 import { PrismaModule } from "../prisma/prisma.module";
+import { EmailModule } from "../email/email.module";
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { PrismaModule } from "../prisma/prisma.module";
     }),
     // Import PrismaModule so we can use PrismaService
     PrismaModule,
+    EmailModule,
   ],
   // Provide the service and strategies
   providers: [AuthService, JwtStrategy, LocalStrategy, RefreshStrategy],

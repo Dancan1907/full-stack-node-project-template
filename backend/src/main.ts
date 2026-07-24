@@ -3,6 +3,8 @@ import { AppModule } from "./app.module";
 import { ValidationPipe } from "@nestjs/common";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
 import { Logger } from "nestjs-pino"; // Import the logger type
+import * as express from "express";
+import * as path from "path";
 
 async function bootstrap() {
   // Create the app with the Pino logger enabled
@@ -12,6 +14,10 @@ async function bootstrap() {
 
   // Use the Pino logger for all NestJS internal logs
   app.useLogger(app.get(Logger));
+
+  // Serve static files from uploads folder
+  const uploadsPath = path.join(process.cwd(), "uploads");
+  app.use("/uploads", express.static(uploadsPath));
 
   // ─── Global prefix ──────────────────────────────────────────────
   app.setGlobalPrefix("api/v1");

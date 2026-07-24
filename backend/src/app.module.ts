@@ -9,6 +9,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { UsersModule } from "./modules/users/users.module";
 import { EmailModule } from "./modules/email/email.module";
 import emailConfig from "./config/email.config";
+import { FilesModule } from "./modules/files/files.module";
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import emailConfig from "./config/email.config";
     AuthModule,
     UsersModule,
     EmailModule,
+    FilesModule,
   ],
   providers: [
     {

@@ -29,6 +29,13 @@ export class UserResponseDto {
   emailVerified?: boolean;
 
   @ApiProperty({
+    example: "/uploads/avatars/avatar-abc123.jpg",
+    nullable: true,
+    description: "Avatar URL",
+  })
+  avatar?: string | null;
+
+  @ApiProperty({
     example: "2026-07-24T10:00:00.000Z",
     description: "Creation timestamp",
   })

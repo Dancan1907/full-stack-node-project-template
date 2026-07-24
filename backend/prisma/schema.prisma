@@ -13,6 +13,7 @@ model User {
   email        String   @unique
   password     String
   name         String?
+  avatar       String?  // URL to avatar image
   role         Role     @default(USER)
   isActive     Boolean  @default(true)
   emailVerified Boolean @default(false)

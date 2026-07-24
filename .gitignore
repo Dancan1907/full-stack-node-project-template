@@ -33,3 +33,6 @@ logs
 # misc
 .DS_Store
 *.pem
+
+# Uploads
+uploads/

@@ -55,6 +55,9 @@ importers:
       "@prisma/client":
         specifier: 5.22.0
         version: 5.22.0(prisma@5.22.0)
+      "@types/multer":
+        specifier: ^2.2.0
+        version: 2.2.0
       argon2:
         specifier: ^0.45.1
         version: 0.45.1
@@ -1053,6 +1056,12 @@ packages:
     resolution:
       {
         integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==,
+      }
+
+  "@types/multer@2.2.0":
+    resolution:
+      {
+        integrity: sha512-3U1troeqGV8Ntp7Q3klwf4zr23VEoqYVocYXaswm9+8z3O9UHDYAqLxjJ/h550iRADTjKdOdhhasXw6gD6kYtg==,
       }
 
   "@types/node@20.19.43":
@@ -5879,6 +5888,10 @@ snapshots:
       "@types/node": 20.19.43
 
   "@types/ms@2.1.0": {}
+
+  "@types/multer@2.2.0":
+    dependencies:
+      "@types/express": 5.0.6
 
   "@types/node@20.19.43":
     dependencies:

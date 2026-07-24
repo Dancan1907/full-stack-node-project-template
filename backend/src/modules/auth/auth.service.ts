@@ -253,6 +253,107 @@ export class AuthService {
     return { success: true };
   }
 
+  // ─── REQUEST PASSWORD RESET ─────────────────────────────────────────
+  async requestPasswordReset(email: string): Promise<{ message: string }> {
+    this.logger.log(`Password reset requested for email: ${email}`);
+    // 1. Find user by email
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    // 2. If user not found, still return success (security best practice)
+    //    This prevents email enumeration attacks
+    if (!user) {
+      this.logger.warn(
+        `Password reset requested for non-existent email: ${email}`,
+      );
+      return {
+        message:
+          "If an account exists with this email, you will receive a password reset link.",
+      };
+    }
+    // 3. Check if account is active
+    if (!user.isActive) {
+      this.logger.warn(
+        `Password reset requested for inactive account: ${email}`,
+      );
+      throw new BadRequestException(
+        "Account is disabled. Please contact support.",
+      );
+    }
+    // 4. Generate reset token (1-hour expiry)
+    const resetToken = randomBytes(32).toString("hex");
+    const resetTokenExpiry = new Date();
+    resetTokenExpiry.setHours(resetTokenExpiry.getHours() + 1);
+    // 5. Store token in database
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetToken,
+        resetTokenExpiry,
+      },
+    });
+    // 6. Send reset email (non-blocking)
+    this.emailService
+      .sendPasswordResetEmail(email, user.name, resetToken)
+      .catch((error) => {
+        this.logger.error(
+          { error },
+          `Failed to send password reset email to ${email}`,
+        );
+      });
+    this.logger.log(`Password reset token generated for: ${email}`);
+    return {
+      message:
+        "If an account exists with this email, you will receive a password reset link.",
+    };
+  }
+
+  // ─── RESET PASSWORD ──────────────────────────────────────────────────
+  async resetPassword(
+    token: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    this.logger.log(
+      `Password reset attempt with token: ${token.substring(0, 8)}...`,
+    );
+    // 1. Find user with valid reset token (not expired)
+    const user = await this.prisma.user.findFirst({
+      where: {
+        resetToken: token,
+        resetTokenExpiry: { gt: new Date() }, // token must not be expired
+      },
+    });
+    if (!user) {
+      this.logger.warn(`Password reset failed: invalid or expired token`);
+      throw new BadRequestException("Invalid or expired reset token");
+    }
+    // 2. Check if account is active
+    if (!user.isActive) {
+      this.logger.warn(
+        `Password reset attempted for inactive account: ${user.email}`,
+      );
+      throw new BadRequestException(
+        "Account is disabled. Please contact support.",
+      );
+    }
+    // 3. Hash the new password
+    const hashedPassword = await argon2.hash(newPassword);
+    // 4. Update password and clear reset token
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        password: hashedPassword,
+        resetToken: null,
+        resetTokenExpiry: null,
+      },
+    });
+    this.logger.log(`Password reset successful for: ${user.email}`);
+    return {
+      message:
+        "Password reset successfully. You can now login with your new password.",
+    };
+  }
+
   // ---------- VALIDATE USER (for LocalStrategy) ----------
   async validateUser(email: string, password: string) {
     // Find user by email

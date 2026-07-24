@@ -100,4 +100,91 @@ export class EmailService {
       throw error;
     }
   }
+
+  /**
+   * Send a password reset email with a token link
+   */
+  async sendPasswordResetEmail(
+    to: string,
+    name: string | null,
+    resetToken: string,
+  ): Promise<void> {
+    const frontendUrl = this.configService.get<string>(
+      "FRONTEND_URL",
+      "http://localhost:3000",
+    );
+    const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    const emailConfig = this.configService.get("email");
+    const fromName = emailConfig.fromName;
+    const fromEmail = emailConfig.from;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Reset Your Password</title>
+        <style>
+          body { font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          .button { display: inline-block; padding: 12px 24px; background: #4F46E5; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; }
+          .warning { color: #DC2626; font-size: 14px; background: #FEE2E2; padding: 12px; border-radius: 4px; }
+          .footer { margin-top: 30px; font-size: 12px; color: #666; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h1>Password Reset Request${name ? ", " + name : ""}</h1>
+          <p>We received a request to reset your password. Click the button below to set a new password:</p>
+          <p style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" class="button">Reset Password</a>
+          </p>
+          <p>Or copy and paste this link into your browser:</p>
+          <p><a href="${resetUrl}">${resetUrl}</a></p>
+          <p>This link will expire in 1 hour.</p>
+          <div class="warning">
+            <p><strong>⚠️ Did you not request this?</strong></p>
+            <p>If you didn't request a password reset, please ignore this email. Your password will not change unless you click the link and set a new one.</p>
+          </div>
+          <div class="footer">
+            <p>If you have any issues, please contact support.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `
+      Password Reset Request${name ? ", " + name : ""}
+
+      We received a request to reset your password. Click the link below to set a new password:
+      ${resetUrl}
+
+      This link will expire in 1 hour.
+
+      ⚠️ Did you not request this?
+      If you didn't request a password reset, please ignore this email. Your password will not change unless you click the link and set a new one.
+
+      If you have any issues, please contact support.
+    `;
+
+    try {
+      await this.transporter.sendMail({
+        from: `"${fromName}" <${fromEmail}>`,
+        to,
+        subject: "Reset Your Password",
+        html,
+        text,
+      });
+      this.logger.log(`Password reset email sent to ${to}`);
+    } catch (error) {
+      this.logger.error(
+        { error },
+        `Failed to send password reset email to ${to}`,
+      );
+      // Don't throw – we want the user to know something went wrong
+      throw error;
+    }
+  }
 }

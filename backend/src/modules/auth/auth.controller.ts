@@ -10,6 +10,9 @@ import { AuthService } from "./auth.service";
 import { RegisterDto } from "./dto/register.dto";
 import { LoginDto } from "./dto/login.dto";
 import { TokenResponseDto } from "./dto/token.dto";
+import { RequestResetDto } from "./dto/request-reset.dto";
+import { ResetPasswordDto } from "./dto/reset-password.dto";
+import { ResetResponseDto } from "./dto/reset-response.dto";
 import { Public } from "../../common/decorators/public.decorator";
 import { JwtAuthGuard } from "../../common/guards/jwt-auth.guard";
 import { RefreshGuard } from "../../common/guards/refresh.guard";
@@ -106,5 +109,38 @@ export class AuthController {
   async logout(@Req() req: Request) {
     const user = req.user as { userId: string; email: string; role: string };
     return this.authService.logout(user.userId);
+  }
+
+  // ─── REQUEST PASSWORD RESET ─────────────────────────────────────────
+  @Public()
+  @Post("request-reset")
+  @Throttle({ default: { limit: 3, ttl: 60000 } }) // Stricter: 3 per minute
+  @ApiOperation({ summary: "Request a password reset email" })
+  @ApiResponse({
+    status: 200,
+    description: "Reset email sent (if account exists)",
+    type: ResetResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Invalid email or account disabled",
+  })
+  async requestPasswordReset(@Body() dto: RequestResetDto) {
+    return this.authService.requestPasswordReset(dto.email!);
+  }
+
+  // ─── RESET PASSWORD ──────────────────────────────────────────────────
+  @Public()
+  @Post("reset-password")
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({ summary: "Reset password with token" })
+  @ApiResponse({
+    status: 200,
+    description: "Password reset successful",
+    type: ResetResponseDto,
+  })
+  @ApiResponse({ status: 400, description: "Invalid or expired token" })
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto.token!, dto.newPassword!);
   }
 }
